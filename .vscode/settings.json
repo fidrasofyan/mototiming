@@ -1,0 +1,22 @@
+{
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.formatOnSave": true,
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "editor.quickSuggestions": {
+    "other": "on",
+    "comments": "on",
+    "strings": "on"
+  },
+  "tailwindCSS.classFunctions": ["tw", "clsx", "tw\\.[a-z-]+", "cva"],
+  "biome.enabled": false,
+  "eslint.enable": false,
+  "prettier.enable": false,
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  }
+}
