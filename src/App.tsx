@@ -1,6 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import {
+  fetchLiveTiming,
+  fetchSchedule,
+  type LiveTiming,
+  type TimingHead,
+  type TimingRider,
+} from './api';
+import {
   MAX_COMPARISON_RIDERS,
   createLapChartPath,
   formatLapTimeDifference,
@@ -24,49 +31,19 @@ import {
   POSITION_FLASH_DURATION,
   scheduleRiderExpiry,
 } from './position-cues';
+import {
+  formatScheduleRange,
+  getActiveScheduleGroup,
+  getScheduleTabNavigationIndex,
+  groupScheduleBroadcasts,
+  isValidTimeZone,
+  isCurrentScheduleBroadcast,
+  selectScheduleEvent,
+  type CurrentScheduleSession,
+  type ScheduleEvent,
+} from './schedule';
 
 export { parseLapTimeMilliseconds } from './pace-ranking';
-
-type TimingRider = {
-  rider_id?: number;
-  order?: number;
-  rider_number?: string;
-  rider_name?: string;
-  rider_surname?: string;
-  rider_shortname?: string;
-  color?: string;
-  text_color?: string;
-  pos?: number;
-  lap_time?: string;
-  num_lap?: number;
-  last_lap_time?: string;
-  last_lap?: number;
-  team_name?: string;
-  bike_name?: string;
-  gap_first?: string;
-  gap_prev?: string;
-  on_pit?: boolean;
-  status_name?: string;
-};
-
-type TimingHead = {
-  category?: string;
-  circuit_name?: string;
-  event_tv_name?: string;
-  event_shortname?: string;
-  date_formated?: string;
-  session_name?: string;
-  session_shortname?: string;
-  session_status_id?: string;
-  session_status_name?: string;
-  session_id?: string;
-  remaining?: string;
-};
-
-type LiveTiming = {
-  head?: TimingHead;
-  rider?: Record<string, TimingRider>;
-};
 
 type ConnectionState = 'connecting' | 'connected' | 'stale';
 type RiderFilter = 'all' | 'favorites';
@@ -77,6 +54,232 @@ type PendingFlip = {
 };
 type SelectedRider = { key: string; rider: TimingRider };
 type LapHistoryOption = SelectedRider & { laps: LapSample[] };
+
+function ScheduleDialog({
+  open,
+  eventId,
+  currentSession,
+  onClose,
+}: {
+  open: boolean;
+  eventId?: string;
+  currentSession?: CurrentScheduleSession;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [event, setEvent] = useState<ScheduleEvent | null>(null);
+  const [error, setError] = useState('');
+  const [selectedGroupKey, setSelectedGroupKey] = useState<string>();
+  const scheduleTabRefs = useRef(new Map<string, HTMLButtonElement>());
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    else if (!open && dialog.open) dialog.close();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+
+    void (async () => {
+      try {
+        const seasonYear = new Date().getFullYear();
+        const payload = await fetchSchedule(seasonYear, { signal: controller.signal });
+        setEvent(selectScheduleEvent(payload, eventId) ?? null);
+        setStatus('ready');
+      } catch (requestError) {
+        if (controller.signal.aborted) return;
+        setError(
+          requestError instanceof Error ? requestError.message : 'Unable to load the schedule'
+        );
+        setStatus('error');
+      }
+    })();
+
+    return () => controller.abort();
+  }, [eventId, open]);
+
+  const groups = event ? groupScheduleBroadcasts(event) : [];
+  const activeGroup = getActiveScheduleGroup(groups, selectedGroupKey, event?.time_zone);
+  const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const hasCircuitTimeZone = isValidTimeZone(event?.time_zone);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="schedule-title"
+      aria-busy={status === 'loading'}
+      onCancel={onClose}
+      onClose={onClose}
+      className="m-auto w-[min(96vw,820px)] max-w-none rounded-xl border border-[#303640] bg-[#11151a] p-0 text-[#eceef2] shadow-2xl backdrop:bg-black/75"
+    >
+      <section className="p-5 sm:p-7">
+        <header className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <div className="mb-1 text-[9px] font-extrabold tracking-[.16em] text-[#8d96a2]">
+              EVENT PROGRAMME
+            </div>
+            <h2 id="schedule-title" className="m-0 text-xl font-semibold">
+              Weekend schedule
+            </h2>
+            {event && (
+              <p className="mt-1 mb-0 text-xs text-[#8d96a2]">
+                {event.name || event.url || 'MotoGP event'}
+                {event.circuit?.name ? ` · ${event.circuit.name}` : ''}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => dialogRef.current?.close()}
+            aria-label="Close schedule"
+            className="grid size-9 shrink-0 place-items-center rounded-md border border-[#343b46] text-lg text-[#aeb6c1] hover:bg-[#20252c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e0b864]"
+          >
+            ×
+          </button>
+        </header>
+
+        {status === 'loading' ? (
+          <div
+            className="grid min-h-36 place-items-center rounded-lg border border-[#282e37] bg-[#0d1014] px-5 text-center text-sm text-[#9ca4ae]"
+            role="status"
+          >
+            Loading event schedule…
+          </div>
+        ) : status === 'error' ? (
+          <div
+            className="rounded-lg border border-[#612d38] bg-[#211317] px-4 py-5 text-sm text-[#f0c3ca]"
+            role="alert"
+          >
+            {error || 'Unable to load the event schedule.'}
+          </div>
+        ) : !event || groups.length === 0 ? (
+          <div className="grid min-h-36 place-items-center rounded-lg border border-[#282e37] bg-[#0d1014] px-5 text-center text-sm text-[#9ca4ae]">
+            No event schedule is available right now.
+          </div>
+        ) : (
+          <div>
+            <div
+              className="mb-4 flex gap-1 overflow-x-auto border-b border-[#282e37]"
+              role="tablist"
+              aria-label="Schedule date"
+            >
+              {groups.map((group, index) => {
+                const selected = activeGroup?.key === group.key;
+                return (
+                  <button
+                    key={group.key}
+                    ref={(element) => {
+                      if (element) scheduleTabRefs.current.set(group.key, element);
+                      else scheduleTabRefs.current.delete(group.key);
+                    }}
+                    id={`schedule-tab-${group.key}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-controls={`schedule-panel-${group.key}`}
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => setSelectedGroupKey(group.key)}
+                    onKeyDown={(keyEvent) => {
+                      const nextIndex = getScheduleTabNavigationIndex(
+                        keyEvent.key,
+                        index,
+                        groups.length
+                      );
+                      const nextGroup = nextIndex === undefined ? undefined : groups[nextIndex];
+                      if (!nextGroup) return;
+                      keyEvent.preventDefault();
+                      setSelectedGroupKey(nextGroup.key);
+                      scheduleTabRefs.current.get(nextGroup.key)?.focus();
+                    }}
+                    className={`shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#e0b864] ${selected ? 'border-[#e51d3e] text-[#f0f2f5]' : 'border-transparent text-[#89919c] hover:text-[#dce0e5]'}`}
+                  >
+                    {group.label}
+                  </button>
+                );
+              })}
+            </div>
+            {activeGroup && (
+              <section
+                id={`schedule-panel-${activeGroup.key}`}
+                role="tabpanel"
+                aria-labelledby={`schedule-tab-${activeGroup.key}`}
+                tabIndex={0}
+                className="schedule-scrollbar max-h-[min(62vh,620px)] overflow-y-auto pr-1 focus-visible:outline-2 focus-visible:outline-[#e0b864]"
+              >
+                <ul className="m-0 list-none space-y-2 p-0">
+                  {activeGroup.broadcasts.map((broadcast, index) => {
+                    const isCurrent = isCurrentScheduleBroadcast(broadcast, currentSession);
+                    return (
+                      <li
+                        key={
+                          broadcast.id ||
+                          `${broadcast.date_start || 'unscheduled'}:${broadcast.name || broadcast.shortname || index}`
+                        }
+                        className={`grid gap-2 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${isCurrent ? 'border-[#71313e] bg-[#171216]' : 'border-[#252b33] bg-[#0d1014]'}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <strong className="text-sm font-semibold text-[#eef0f3]">
+                              {broadcast.name || broadcast.shortname || 'Scheduled broadcast'}
+                            </strong>
+                            {isCurrent && (
+                              <span className="rounded border border-[#71313e] bg-[#2a171c] px-1.5 py-0.5 text-[8px] font-extrabold tracking-[.08em] text-[#f18495]">
+                                CURRENT
+                              </span>
+                            )}
+                            {broadcast.category?.name && (
+                              <span className="rounded border border-[#383f49] px-1.5 py-0.5 text-[9px] font-bold tracking-[.06em] text-[#aeb6c1]">
+                                {broadcast.category.name}
+                              </span>
+                            )}
+                          </div>
+                          {(broadcast.kind || broadcast.type) && (
+                            <div className="mt-1 text-[10px] text-[#858d98]">
+                              {[broadcast.kind, broadcast.type].filter(Boolean).join(' · ')}
+                            </div>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 text-[10px] tabular-nums">
+                          <div>
+                            <div className="mb-1 text-[8px] font-bold tracking-[.08em] text-[#77808b]">
+                              YOUR TIME{localTimeZone ? ` · ${localTimeZone}` : ''}
+                            </div>
+                            <div className="font-semibold text-[#dce0e5]">
+                              {formatScheduleRange(broadcast.date_start, broadcast.date_end)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="mb-1 text-[8px] font-bold tracking-[.08em] text-[#77808b]">
+                              CIRCUIT TIME
+                              {hasCircuitTimeZone ? ` · ${event.time_zone}` : ' · ZONE UNAVAILABLE'}
+                            </div>
+                            <div className="font-semibold text-[#dce0e5]">
+                              {hasCircuitTimeZone
+                                ? formatScheduleRange(
+                                    broadcast.date_start,
+                                    broadcast.date_end,
+                                    event.time_zone
+                                  )
+                                : 'Unavailable'}
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+          </div>
+        )}
+      </section>
+    </dialog>
+  );
+}
 
 const POLL_INTERVAL = 3_000;
 const FAVORITES_STORAGE_KEY = 'mototiming:favorites:v1';
@@ -633,6 +836,7 @@ export function formatRemaining(value?: string) {
 
 export function App() {
   const [timing, setTiming] = useState<LiveTiming | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(loadFavoriteKeys);
   const [riderFilter, setRiderFilter] = useState<RiderFilter>('all');
   const [connection, setConnection] = useState<ConnectionState>('connecting');
@@ -664,9 +868,7 @@ export function App() {
       if (requestInFlight.current) return;
       requestInFlight.current = true;
       try {
-        const response = await fetch('/api/live-timing', { cache: 'no-store' });
-        if (!response.ok) throw new Error(`Feed request failed (${response.status})`);
-        const data = (await response.json()) as LiveTiming;
+        const data = await fetchLiveTiming();
         if (!mounted) return;
         const nextRiders = Object.values(data.rider ?? {}).sort((a, b) => {
           const aPosition = validPosition(a) ?? Number.MAX_SAFE_INTEGER;
@@ -1031,6 +1233,31 @@ export function App() {
               </>
             )}
           </div>
+          <button
+            type="button"
+            onClick={() => setScheduleOpen(true)}
+            aria-haspopup="dialog"
+            className="mt-4 inline-flex items-center gap-2 rounded-md border border-[#46404a] bg-[#191b21] px-3 py-2 text-xs font-semibold text-[#e6e8ec] transition-colors hover:border-[#e0b864] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e0b864]"
+          >
+            <svg className="size-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <rect
+                x="2.5"
+                y="4"
+                width="15"
+                height="13"
+                rx="2"
+                stroke="currentColor"
+                strokeWidth="1.4"
+              />
+              <path
+                d="M6 2.5v3M14 2.5v3M2.5 8h15M6 11h2m3 0h2m-7 3h2"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+              />
+            </svg>
+            Schedule
+          </button>
         </div>
         <div className="relative z-10 grid min-w-0 grid-cols-[1fr_auto] items-center gap-x-[14px] gap-y-[7px] rounded-[10px] border border-[#30343d] bg-[rgba(8,10,13,.32)] px-[15px] py-[13px] sm:block sm:min-w-[215px] sm:px-[22px] sm:py-5">
           <div className="col-start-1 text-[9px] font-bold tracking-[.16em] text-[#858d98]">
@@ -1421,6 +1648,22 @@ export function App() {
         onToggleComparison={toggleComparison}
         onClose={closeRiderHistory}
       />
+      {scheduleOpen && (
+        <ScheduleDialog
+          open={scheduleOpen}
+          eventId={head?.event_id === undefined ? undefined : String(head.event_id)}
+          currentSession={
+            head
+              ? {
+                  shortName: head.session_shortname,
+                  name: head.session_name,
+                  category: head.category,
+                }
+              : undefined
+          }
+          onClose={() => setScheduleOpen(false)}
+        />
+      )}
       <div className="mt-[14px] h-px bg-[linear-gradient(90deg,transparent,#292e36_20%,#292e36_80%,transparent)]" />
     </main>
   );

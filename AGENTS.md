@@ -16,14 +16,15 @@ This is a Bun-served React and TypeScript dashboard for MotoGP live timing. It u
 
 ## Application Structure
 
-- `src/server.ts` starts the Bun server and serves the app and same-origin API route.
-- `src/main.tsx` mounts the React app; `src/App.tsx` contains the live timing dashboard and feed handling.
+- `src/server.ts` starts the Bun server and serves the app and same-origin API routes.
+- `src/api.ts` contains browser API helpers and server-side MotoGP proxy requests.
+- `src/main.tsx` mounts the React app; `src/App.tsx` contains the live timing dashboard, schedule dialog, and feed handling.
 - `src/index.html` is the frontend HTML entry point; `src/index.css` contains global styles and Tailwind setup.
-- `src/App.test.ts` contains Bun tests for dashboard data helpers.
+- `src/App.test.ts`, `src/api.test.ts`, and `src/schedule.test.ts` contain Bun tests for dashboard, API, and schedule helpers.
 
 ## API and Styling
 
-- The browser must fetch live timing through the same-origin `/api/live-timing` route in `src/server.ts`; do not call MotoGP's API directly from client code because browser CORS may block it.
-- Use `MotoGP-API.md` as the reference for the live timing response shape.
+- Browser code must use the helpers in `src/api.ts`, which call the same-origin `/api/live-timing` and `/api/schedule` routes; server-side MotoGP requests also live in `src/api.ts` so clients do not contact MotoGP directly.
+- Use `MotoGP-API.md` as the reference for live timing and schedule response shapes.
 - Use Tailwind utility classes for component styling. Keep `src/index.css` limited to Tailwind imports and document-wide defaults or styles that utilities cannot express cleanly.
 - Keep rider and session data handling tolerant of missing feed fields; the feed can be unavailable or stale.
