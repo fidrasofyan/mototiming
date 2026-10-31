@@ -1,0 +1,7 @@
+services:
+  mototiming:
+    build: .
+    container_name: ${CONTAINER_NAME:?CONTAINER_NAME is required}
+    restart: unless-stopped
+    ports:
+      - '${APP_HOST:?APP_HOST is required}:${APP_PORT:?APP_PORT is required}:3000'

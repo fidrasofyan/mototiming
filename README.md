@@ -13,6 +13,24 @@ bun run dev
 
 Open [http://localhost:3000](http://localhost:3000). For a local production run, use `bun run start`.
 
+## Run with Docker Compose
+
+Set the required Compose variables in `.env` at the project root, then build and start the container:
+
+```dotenv
+CONTAINER_NAME=mototiming
+APP_HOST=127.0.0.1
+APP_PORT=3000
+```
+
+Then run:
+
+```sh
+docker compose up --build
+```
+
+`APP_HOST` and `APP_PORT` configure the host address and port; the app listens on port `3000` inside the container.
+
 ## Commands
 
 ```sh
