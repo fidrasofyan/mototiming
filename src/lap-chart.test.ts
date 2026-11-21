@@ -1,30 +1,68 @@
 import { expect, test } from 'bun:test';
 
 import {
-  MAX_COMPARISON_RIDERS,
+  CHART_BACKGROUND,
+  MIN_SERIES_LUMINANCE,
+  PRIMARY_SERIES_COLOR,
   createLapChartPath,
+  ensureChartContrast,
   formatLapTimeDifference,
   getLapChartDomain,
+  normalizeRiderColor,
+  relativeLuminance,
+  resolveSeriesStyles,
   toggleComparisonRider,
   getLapTimeDifference,
   type LapChartPoint,
 } from './lap-chart';
 
-test('limits comparisons to four additional riders and ignores the primary rider', () => {
+test('toggles any number of comparison riders and ignores the primary rider', () => {
   const primary = 'rider-1';
   let selected: string[] = [];
-  for (let index = 2; index <= 6; index += 1) {
+  for (let index = 2; index <= 21; index += 1) {
     selected = toggleComparisonRider(selected, `rider-${index}`, primary);
   }
 
-  expect(MAX_COMPARISON_RIDERS).toBe(4);
-  expect(selected).toEqual(['rider-2', 'rider-3', 'rider-4', 'rider-5']);
+  expect(selected).toHaveLength(20);
+  expect(selected[0]).toBe('rider-2');
+  expect(selected.at(-1)).toBe('rider-21');
   expect(toggleComparisonRider(selected, primary, primary)).toEqual(selected);
-  expect(toggleComparisonRider(selected, 'rider-3', primary)).toEqual([
-    'rider-2',
-    'rider-4',
-    'rider-5',
-  ]);
+  expect(toggleComparisonRider(selected, 'rider-3', primary)).not.toContain('rider-3');
+});
+
+test('normalizes feed rider colors and rejects unusable values', () => {
+  expect(normalizeRiderColor('ff6600')).toBe('#ff6600');
+  expect(normalizeRiderColor('#0C368C')).toBe('#0c368c');
+  expect(normalizeRiderColor(' red ')).toBeUndefined();
+  expect(normalizeRiderColor('#fff')).toBeUndefined();
+  expect(normalizeRiderColor(undefined)).toBeUndefined();
+});
+
+test('lifts dark rider colors to a readable contrast on the chart background', () => {
+  expect(ensureChartContrast('#ff6600')).toBe('#ff6600');
+
+  const lifted = ensureChartContrast('#0c368c');
+  expect(relativeLuminance(lifted)).toBeGreaterThanOrEqual(MIN_SERIES_LUMINANCE);
+  expect(relativeLuminance(lifted)).toBeGreaterThan(relativeLuminance('#0c368c'));
+  expect(relativeLuminance(CHART_BACKGROUND)).toBeLessThan(MIN_SERIES_LUMINANCE);
+});
+
+test('assigns feed colors, dashes duplicates, and generates colors when missing', () => {
+  const styles = resolveSeriesStyles(
+    [
+      { key: 'primary', color: 'e51d3e' },
+      { key: 'rider-a', color: 'ff6600' },
+      { key: 'rider-b', color: '#FF6600' },
+      { key: 'rider-c' },
+      { key: 'rider-d' },
+    ],
+    'primary'
+  );
+
+  expect(styles.get('primary')).toEqual({ color: PRIMARY_SERIES_COLOR });
+  expect(styles.get('rider-a')).toEqual({ color: '#ff6600' });
+  expect(styles.get('rider-b')?.dash).toBe('6 4');
+  expect(styles.get('rider-c')?.color).not.toBe(styles.get('rider-d')?.color);
 });
 
 test('computes one lap and time domain across all rider series', () => {
