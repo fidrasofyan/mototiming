@@ -209,7 +209,7 @@ function ScheduleDialog({
                 role="tabpanel"
                 aria-labelledby={`schedule-tab-${activeGroup.key}`}
                 tabIndex={0}
-                className="schedule-scrollbar max-h-[min(62vh,620px)] overflow-y-auto pr-1 focus-visible:outline-2 focus-visible:outline-[#e0b864]"
+                className="max-h-[min(62vh,620px)] overflow-y-auto pr-1 focus-visible:outline-2 focus-visible:outline-[#e0b864]"
               >
                 <ul className="m-0 list-none space-y-2 p-0">
                   {activeGroup.broadcasts.map((broadcast, index) => {
@@ -554,10 +554,10 @@ function LapHistoryDialog({
       aria-labelledby="lap-history-title"
       onCancel={onClose}
       onClose={onClose}
-      className="m-auto w-[min(96vw,960px)] max-w-none rounded-xl border border-[#303640] bg-[#11151a] p-0 text-[#eceef2] shadow-2xl backdrop:bg-black/75"
+      className="m-auto max-h-[90vh] w-[min(96vw,960px)] max-w-none overflow-y-auto rounded-xl border border-[#303640] bg-[#11151a] p-0 text-[#eceef2] shadow-2xl backdrop:bg-black/75"
     >
       {selected && (
-        <section className="max-h-[90vh] overflow-y-auto p-5 sm:p-7">
+        <section className="p-5 sm:p-7">
           <header className="mb-5 flex items-start justify-between gap-4">
             <div>
               <div className="mb-1 text-[9px] font-extrabold tracking-[.16em] text-[#8d96a2]">
@@ -1446,7 +1446,7 @@ export function App() {
           </div>
         ) : (
           <>
-            <div className="[scrollbar-color:#343b46_#101318] overflow-auto rounded-[11px] border border-[#282e37] bg-[#101318]">
+            <div className="overflow-auto rounded-[11px] border border-[#282e37] bg-[#101318]">
               {riderFilter === 'favorites' && visibleRiders.length === 0 ? (
                 <div
                   className="flex min-h-[120px] flex-col items-center justify-center gap-2 px-4 text-center"

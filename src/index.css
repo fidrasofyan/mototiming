@@ -1,33 +1,42 @@
 @import 'tailwindcss';
 
-.schedule-scrollbar {
+html,
+* {
   scrollbar-color: #343b46 transparent;
   scrollbar-width: thin;
 }
 
-.schedule-scrollbar:hover,
-.schedule-scrollbar:focus-visible {
+*:hover,
+*:focus-visible {
   scrollbar-color: #626b77 transparent;
 }
 
-.schedule-scrollbar::-webkit-scrollbar {
+*::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
-.schedule-scrollbar::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.schedule-scrollbar::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 9999px;
   background: #343b46;
   background-clip: padding-box;
 }
 
-.schedule-scrollbar:hover::-webkit-scrollbar-thumb,
-.schedule-scrollbar:focus-visible::-webkit-scrollbar-thumb {
+*:hover::-webkit-scrollbar-thumb,
+*:focus-visible::-webkit-scrollbar-thumb {
   background-color: #626b77;
+}
+
+@media (forced-colors: active) {
+  html,
+  * {
+    scrollbar-color: auto;
+  }
 }
 
 @keyframes position-up {
